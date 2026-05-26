@@ -1,0 +1,19 @@
+# Aura Git Ignored Files
+
+# Local compiled binaries
+*.exe
+dist/
+
+# Local databases and state stores
+library_state.json
+books_catalog.csv
+
+# Standard editor workspace configurations
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Temporary OS files
+Thumbs.db
+desktop.ini
