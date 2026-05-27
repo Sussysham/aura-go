@@ -107,35 +107,58 @@ func LoadConfig(path string) error {
 }
 
 func InitPaths() {
-	// If custom paths are specified in config, use them; otherwise, auto-detect local folders.
+	// 1. Resolve Catalog Path
 	if AppConfig.Paths.Catalog != "" {
 		CSVPath = AppConfig.Paths.Catalog
 	} else {
-		originalCSV := `D:\Audit and revam\_inventory\books_catalog.csv`
-		if _, err := os.Stat(originalCSV); err == nil {
-			CSVPath = originalCSV
+		// Portable mode: local CWD check
+		localCSV := "books_catalog.csv"
+		if _, err := os.Stat(localCSV); err == nil {
+			CSVPath = localCSV
 		} else {
-			currDir, err := os.Getwd()
-			if err == nil {
-				CSVPath = filepath.Join(currDir, "books_catalog.csv")
+			// Backward compatibility with workspace
+			originalCSV := `D:\Audit and revam\_inventory\books_catalog.csv`
+			if _, err := os.Stat(originalCSV); err == nil {
+				CSVPath = originalCSV
 			} else {
-				CSVPath = "books_catalog.csv"
+				// Global fallback folder per XDG/Appdata
+				configDir, err := os.UserConfigDir()
+				if err == nil {
+					auraDir := filepath.Join(configDir, "aura")
+					_ = os.MkdirAll(auraDir, 0755)
+					CSVPath = filepath.Join(auraDir, "books_catalog.csv")
+				} else {
+					// Hard fallback
+					CSVPath = "books_catalog.csv"
+				}
 			}
 		}
 	}
 
+	// 2. Resolve State Path
 	if AppConfig.Paths.State != "" {
 		StatePath = AppConfig.Paths.State
 	} else {
-		originalState := `D:\Audit and revam\aura-go\library_state.json`
-		if _, err := os.Stat(originalState); err == nil {
-			StatePath = originalState
+		// Portable mode
+		localState := "library_state.json"
+		if _, err := os.Stat(localState); err == nil {
+			StatePath = localState
 		} else {
-			currDir, err := os.Getwd()
-			if err == nil {
-				StatePath = filepath.Join(currDir, "library_state.json")
+			// Compatibility
+			originalState := `D:\Audit and revam\aura-go\library_state.json`
+			if _, err := os.Stat(originalState); err == nil {
+				StatePath = originalState
 			} else {
-				StatePath = "library_state.json"
+				// Global fallback
+				configDir, err := os.UserConfigDir()
+				if err == nil {
+					auraDir := filepath.Join(configDir, "aura")
+					_ = os.MkdirAll(auraDir, 0755)
+					StatePath = filepath.Join(auraDir, "library_state.json")
+				} else {
+					// Hard fallback
+					StatePath = "library_state.json"
+				}
 			}
 		}
 	}

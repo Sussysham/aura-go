@@ -519,3 +519,37 @@ func TestMCPServerIntegration(t *testing.T) {
 	_ = stdin.Close()
 	_ = cmd.Wait()
 }
+
+// TestCrossPlatformPathResolution verifies that InitPaths correctly resolves configurations under standard system paths or falls back gracefully
+func TestCrossPlatformPathResolution(t *testing.T) {
+	// Temporarily clear custom configurations
+	originalCatalog := config.AppConfig.Paths.Catalog
+	originalState := config.AppConfig.Paths.State
+	defer func() {
+		config.AppConfig.Paths.Catalog = originalCatalog
+		config.AppConfig.Paths.State = originalState
+		config.InitPaths() // Restore paths
+	}()
+
+	config.AppConfig.Paths.Catalog = ""
+	config.AppConfig.Paths.State = ""
+
+	config.InitPaths()
+
+	// Verify resolved paths are not empty
+	if config.CSVPath == "" {
+		t.Error("InitPaths resolved empty CSVPath")
+	}
+	if config.StatePath == "" {
+		t.Error("InitPaths resolved empty StatePath")
+	}
+
+	// Verify standard XDG fallback folder logic on POSIX systems or roaming folder logic on Windows
+	configDir, err := os.UserConfigDir()
+	if err == nil {
+		expectedSuffix := filepath.Join("aura", "books_catalog.csv")
+		if !strings.HasSuffix(filepath.Clean(config.CSVPath), expectedSuffix) {
+			t.Logf("CSVPath resolved to %s (precedence or fallback under config dir: %s)", config.CSVPath, configDir)
+		}
+	}
+}

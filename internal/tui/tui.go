@@ -395,12 +395,12 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 						}
 					}
 
-					err := viewer.OpenBookInSumatra(b)
+					err := viewer.OpenBookCrossPlatform(b)
 					if err != nil {
-						statusMsg = "Sumatra Launch failed: " + err.Error()
+						statusMsg = "Launch failed: " + err.Error()
 						statusColor = config.ActiveTheme.ErrorSt
 					} else {
-						statusMsg = "Opened in SumatraPDF. Book status transitioned to 'Reading'."
+						statusMsg = "Opened document in default system viewer. Status transitioned to 'Reading'."
 						statusColor = config.ActiveTheme.SuccessSt
 						filteredBooks = FilterBooks(books, libraryState, searchQuery)
 					}
@@ -609,11 +609,11 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 					groupBooks := catalog.GetBooksByGroup(books, activeGrp)
 					if subSelectedIndex < len(groupBooks) {
 						target := groupBooks[subSelectedIndex]
-						statusMsg = "Opening to visually compare in SumatraPDF: " + target.FileName + "..."
+						statusMsg = "Opening to visually compare: " + target.FileName + "..."
 						statusColor = config.ActiveTheme.SuccessSt
 						DrawDuplicates(books, duplicates, selectedIndex, scrollOffset, subSelectedIndex, activePanel, statusMsg, statusColor, width, height)
 						
-						_ = viewer.OpenBookInSumatra(target)
+						_ = viewer.OpenBookCrossPlatform(target)
 					}
 				}
 			}
