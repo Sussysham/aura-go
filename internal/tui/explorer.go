@@ -10,9 +10,9 @@ import (
 
 func DrawExplorer(books []catalog.Book, sel, offset int, isSearching bool, query, statusMsg, statusColor string, state *state.LibraryState, width, height int) {
 	fmt.Print("\033[H\033[2J") // Clear
-	DrawLine(width, "=", config.ColorViolet)
-	fmt.Printf("%s                             AURA COMPARED TUI ENGINE (GO)                                 \033[0m\n", config.ColorHeader)
-	DrawLine(width, "=", config.ColorViolet)
+	DrawLine(width, "=", config.ActiveTheme.Violet)
+	fmt.Printf("%s                             AURA COMPARED TUI ENGINE (GO)                                 \033[0m\n", config.ActiveTheme.Header)
+	DrawLine(width, "=", config.ActiveTheme.Violet)
 	
 	// WIP Active Focus Deck
 	wipSlots := []string{}
@@ -21,7 +21,7 @@ func DrawExplorer(books []catalog.Book, sel, offset int, isSearching bool, query
 			wipSlots = append(wipSlots, b.Title)
 		}
 	}
-	fmt.Printf("⚡ %s[WIP FOCUS DECK (Max 2)]\033[0m ", config.ColorSuccess)
+	fmt.Printf("⚡ %s[WIP FOCUS DECK (Max 2)]\033[0m ", config.ActiveTheme.Success)
 	if len(wipSlots) == 0 {
 		fmt.Println("\033[37mEmpty. (Highlight a book and press 'w' to set Reading Focus!)\033[0m")
 	} else {
@@ -29,14 +29,14 @@ func DrawExplorer(books []catalog.Book, sel, offset int, isSearching bool, query
 			if len(w) > 30 {
 				w = w[:27] + "..."
 			}
-			fmt.Printf("%sSlot %d: %s\033[0m", config.ColorWarning, i+1, w)
+			fmt.Printf("%sSlot %d: %s\033[0m", config.ActiveTheme.Warning, i+1, w)
 			if i < len(wipSlots)-1 {
 				fmt.Print("  |  ")
 			}
 		}
 		fmt.Println()
 	}
-	DrawLine(width, "-", config.ColorMuted)
+	DrawLine(width, "-", config.ActiveTheme.Muted)
 
 	titleWidth := width - 48
 	if titleWidth < 20 {
@@ -45,7 +45,7 @@ func DrawExplorer(books []catalog.Book, sel, offset int, isSearching bool, query
 	
 	headerFormat := fmt.Sprintf("\033[1;37m%%-3s | %%-%ds | %%-18s | %%-9s | %%-6s\033[0m\n", titleWidth)
 	fmt.Printf(headerFormat, "Idx", "Book Title", "Author", "Status", "Format")
-	DrawLine(width, "-", config.ColorMuted)
+	DrawLine(width, "-", config.ActiveTheme.Muted)
 
 	visibleRows := height - 14
 	if visibleRows < 5 {
@@ -54,14 +54,14 @@ func DrawExplorer(books []catalog.Book, sel, offset int, isSearching bool, query
 
 	if len(books) == 0 {
 		fmt.Println()
-		fmt.Printf("    %sWelcome to Aura TUI! Your Native Portable Library is Ready.\033[0m\n", config.ColorHeader)
+		fmt.Printf("    %sWelcome to Aura TUI! Your Native Portable Library is Ready.\033[0m\n", config.ActiveTheme.Header)
 		fmt.Println()
 		fmt.Println("    To get started, you can automatically index your ebook files:")
-		fmt.Printf("    1. Press %s'i'\033[0m to enter the directory auto-discovery scanner.\n", config.ColorSuccess)
+		fmt.Printf("    1. Press %s'i'\033[0m to enter the directory auto-discovery scanner.\n", config.ActiveTheme.Success)
 		fmt.Println("    2. Provide the absolute directory path of your book collection.")
 		fmt.Println("    3. Aura will recursively crawl, clean, fingerprint, and load them instantly!")
 		fmt.Println()
-		fmt.Printf("    Alternatively, you can drop a catalog file named %s'books_catalog.csv'\033[0m\n", config.ColorWarning)
+		fmt.Printf("    Alternatively, you can drop a catalog file named %s'books_catalog.csv'\033[0m\n", config.ActiveTheme.Warning)
 		fmt.Println("    directly in this executable's directory to load your assets.")
 		fmt.Println()
 	} else {
@@ -89,35 +89,35 @@ func DrawExplorer(books []catalog.Book, sel, offset int, isSearching bool, query
 			statusColorCode := "\033[37m"
 			switch bStatus {
 			case "Reading":
-				statusColorCode = config.ColorWarning
+				statusColorCode = config.ActiveTheme.Warning
 			case "Read":
-				statusColorCode = config.ColorSuccess
+				statusColorCode = config.ActiveTheme.Success
 			case "Reference":
-				statusColorCode = config.ColorViolet
+				statusColorCode = config.ActiveTheme.Violet
 			}
 
 			if idx == sel {
-				rowFormat := fmt.Sprintf("%s%%03d | %%-%ds | %%-18s | %%-9s | %%-6s\033[0m\n", config.ColorSelect, titleWidth)
+				rowFormat := fmt.Sprintf("%s%%03d | %%-%ds | %%-18s | %%-9s | %%-6s\033[0m\n", config.ActiveTheme.Selection, titleWidth)
 				fmt.Printf(rowFormat, idx+1, title, author, bStatus, b.Format)
 			} else {
-				rowFormat := fmt.Sprintf("%s%%03d\033[0m | %%-%ds | %%-18s | %%s%%-9s\033[0m | %%-6s\n", config.ColorAccent, titleWidth)
+				rowFormat := fmt.Sprintf("%s%%03d\033[0m | %%-%ds | %%-18s | %%s%%-9s\033[0m | %%-6s\n", config.ActiveTheme.Accent, titleWidth)
 				fmt.Printf(rowFormat, idx+1, title, author, statusColorCode, bStatus, b.Format)
 			}
 		}
 	}
 
-	DrawLine(width, "-", config.ColorMuted)
+	DrawLine(width, "-", config.ActiveTheme.Muted)
 
 	// Search bar rendering
 	if isSearching {
-		fmt.Printf("🔍 %sSEARCH FILTER:%s %s▮\n", config.ColorWarning, "\033[0m", query)
+		fmt.Printf("🔍 %sSEARCH FILTER:%s %s▮\n", config.ActiveTheme.Warning, "\033[0m", query)
 	} else if query != "" {
-		fmt.Printf("🔍 %sACTIVE FILTER:%s %s (Press 'Esc' to clear or change)\n", config.ColorHeader, "\033[0m", query)
+		fmt.Printf("🔍 %sACTIVE FILTER:%s %s (Press 'Esc' to clear or change)\n", config.ActiveTheme.Header, "\033[0m", query)
 	} else {
 		fmt.Println("🔍 Type query directly in search mode by pressing 's'")
 	}
 
-	DrawLine(width, "=", config.ColorMuted)
+	DrawLine(width, "=", config.ActiveTheme.Muted)
 	
 	// v5 HUD - Log Bar + Dynamic Shortcut Guide
 	fmt.Printf("%s🔔 LOG: %s\033[0m\n", statusColor, statusMsg)

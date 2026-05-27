@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
+	"aura-go/internal/config"
 	"aura-go/internal/reader"
 	"aura-go/internal/state"
 )
@@ -250,5 +252,208 @@ func TestStateBackupAndAtomicSave(t *testing.T) {
 	corruptPath := stateFilePath + ".corrupt"
 	if _, err := os.Stat(corruptPath); err != nil {
 		t.Errorf("Corrupt backup file %s was not created: %v", corruptPath, err)
+	}
+}
+
+// TestTOMLConfigParsing verifies default configuration loading and parsing
+func TestTOMLConfigParsing(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "aura_config_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	configPath := filepath.Join(tempDir, "aura.toml")
+
+	// Load should auto-generate defaults if file doesn't exist
+	err = config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed to generate defaults: %v", err)
+	}
+
+	// Verify file was created
+	if _, err := os.Stat(configPath); err != nil {
+		t.Fatalf("config file was not auto-generated: %v", err)
+	}
+
+	// Verify defaults parsed correctly
+	if config.AppConfig.General.WIPLimit != 2 {
+		t.Errorf("Expected default WIPLimit = 2, got %d", config.AppConfig.General.WIPLimit)
+	}
+	if config.AppConfig.Theme.Name != "midnight" {
+		t.Errorf("Expected default theme = 'midnight', got %s", config.AppConfig.Theme.Name)
+	}
+	if config.AppConfig.Keybindings.Search != "s" {
+		t.Errorf("Expected default search key = 's', got %s", config.AppConfig.Keybindings.Search)
+	}
+
+	// Override config file and reload
+	customTOML := `
+[general]
+wip_limit = 5
+default_viewer = "system"
+
+[keybindings]
+search = "f"
+theme_cycle = "c"
+`
+	err = os.WriteFile(configPath, []byte(customTOML), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write custom config: %v", err)
+	}
+
+	err = config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed to load custom config: %v", err)
+	}
+
+	if config.AppConfig.General.WIPLimit != 5 {
+		t.Errorf("Expected overridden WIPLimit = 5, got %d", config.AppConfig.General.WIPLimit)
+	}
+	if config.AppConfig.General.DefaultViewer != "system" {
+		t.Errorf("Expected overridden default_viewer = 'system', got %s", config.AppConfig.General.DefaultViewer)
+	}
+	if config.AppConfig.Keybindings.Search != "f" {
+		t.Errorf("Expected overridden search key = 'f', got %s", config.AppConfig.Keybindings.Search)
+	}
+	if config.AppConfig.Keybindings.ThemeCycle != "c" {
+		t.Errorf("Expected overridden theme_cycle = 'c', got %s", config.AppConfig.Keybindings.ThemeCycle)
+	}
+}
+
+// TestHexToTrueColorConversion verifies hexadecimal conversion to 24-bit TrueColor ANSI escape codes
+func TestHexToTrueColorConversion(t *testing.T) {
+	tests := []struct {
+		hex      string
+		expected string
+	}{
+		{"#7B2FBE", "\033[38;2;123;47;190m"},
+		{"00D4FF", "\033[38;2;0;212;255m"},
+		{"#FF1744", "\033[38;2;255;23;68m"},
+		{"invalid", ""},
+	}
+
+	for _, tt := range tests {
+		actual := config.HexToTrueColor(tt.hex)
+		if actual != tt.expected {
+			t.Errorf("config.HexToTrueColor(%q) = %q; want %q", tt.hex, actual, tt.expected)
+		}
+	}
+}
+
+// TestMOBIParserDecompression verifies PalmDOC LZ77 decompression including literal and overlapping sequences
+func TestMOBIParserDecompression(t *testing.T) {
+	tests := []struct {
+		name       string
+		compressed []byte
+		expected   string
+	}{
+		{"Plain literal", []byte("hello"), "hello"},
+		{"Literal length-copy", []byte{0x05, 'a', 'b', 'c', 'd', 'e'}, "abcde"},
+		{"Space compression", []byte{0x80 ^ 'A'}, " A"},
+		{"LZ77 overlapping copy", []byte{'a', 'b', 'c', 'd', 0x80, 34}, "abcdabcda"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual, err := reader.DecompressPalmDOC(tt.compressed)
+			if err != nil {
+				t.Fatalf("DecompressPalmDOC failed: %v", err)
+			}
+			if string(actual) != tt.expected {
+				t.Errorf("got %q, want %q", string(actual), tt.expected)
+			}
+		})
+	}
+}
+
+// TestDOCXParserExtraction verifies XML parsing and text extraction from mock ZIP
+func TestDOCXParserExtraction(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	documentXML := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:r>
+        <w:t>Hello </w:t>
+      </w:r>
+      <w:r>
+        <w:t>World</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Second paragraph</w:t>
+      </w:r>
+    </w:p>
+  </w:body>
+</w:document>`
+
+	w, err := zw.Create("word/document.xml")
+	if err != nil {
+		t.Fatalf("Failed to create document.xml: %v", err)
+	}
+	_, _ = w.Write([]byte(documentXML))
+	_ = zw.Close()
+
+	tempFile, err := os.CreateTemp("", "mock_docx_*.docx")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
+
+	_, _ = tempFile.Write(buf.Bytes())
+	_ = tempFile.Close()
+
+	extracted, err := reader.ExtractDOCXText(tempFile.Name())
+	if err != nil {
+		t.Fatalf("ExtractDOCXText failed: %v", err)
+	}
+
+	expected := "Hello World\nSecond paragraph\n"
+	if extracted != expected {
+		t.Errorf("got %q, want %q", extracted, expected)
+	}
+}
+
+// TestMarkdownTUIRendering verifies live on-the-fly markdown highlighting and marker toggling
+func TestMarkdownTUIRendering(t *testing.T) {
+	theme := config.GetTheme("midnight", config.CustomThemeConfig{})
+
+	tests := []struct {
+		input       string
+		showRaw     bool
+		contains    string
+		notContains string
+	}{
+		{"# Header 1", false, "Header 1", "# "},
+		{"# Header 1", true, "# Header 1", ""},
+		{"**bold text**", false, "bold text", "**"},
+		{"**bold text**", true, "**bold text**", ""},
+		{"*italic text*", false, "italic text", "*"},
+		{"*italic text*", true, "*italic text*", ""},
+		{"`code block`", false, "code block", "`"},
+		{"`code block`", true, "`code block`", ""},
+		{"- Bullet Item", false, "• Bullet Item", "- "},
+		{"- Bullet Item", true, "- Bullet Item", "•"},
+	}
+
+	stripANSI := func(s string) string {
+		re := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+		return re.ReplaceAllString(s, "")
+	}
+
+	for _, tt := range tests {
+		actual := reader.FormatMarkdownLine(tt.input, theme, tt.showRaw)
+		plain := stripANSI(actual)
+		if tt.contains != "" && !strings.Contains(plain, tt.contains) {
+			t.Errorf("FormatMarkdownLine(%q, showRaw=%v) plain output %q should contain %q (actual: %q)", tt.input, tt.showRaw, plain, tt.contains, actual)
+		}
+		if tt.notContains != "" && strings.Contains(plain, tt.notContains) {
+			t.Errorf("FormatMarkdownLine(%q, showRaw=%v) plain output %q should NOT contain %q (actual: %q)", tt.input, tt.showRaw, plain, tt.notContains, actual)
+		}
 	}
 }

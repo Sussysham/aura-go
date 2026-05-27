@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"golang.org/x/term"
 
@@ -13,22 +14,26 @@ import (
 )
 
 func main() {
-	config.InitPaths()
-	
+	configPath := "aura.toml"
+	if exePath, err := os.Executable(); err == nil {
+		configPath = filepath.Join(filepath.Dir(exePath), "aura.toml")
+	}
+	_ = config.LoadConfig(configPath)
+
 	var initialMsg = "Ready."
-	var initialColor = config.ColorSuccessSt
+	var initialColor = config.ActiveTheme.SuccessSt
 
 	stateData, err := state.LoadState(config.StatePath)
 	if err != nil {
 		initialMsg = "⚠️ " + err.Error()
-		initialColor = config.ColorErrorSt
+		initialColor = config.ActiveTheme.ErrorSt
 	}
 
 	books, err := catalog.LoadBooks(config.CSVPath)
 	if err != nil {
 		books = []catalog.Book{}
 		initialMsg = "⚠️ Catalog load failed: " + err.Error()
-		initialColor = config.ColorErrorSt
+		initialColor = config.ActiveTheme.ErrorSt
 	}
 
 	fd := int(os.Stdin.Fd())

@@ -41,6 +41,7 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 	
 	// Reader session timer
 	var readerStartTime time.Time
+	showRawMarkdown := false
 
 	searchQuery := ""
 	isSearching := false
@@ -128,7 +129,7 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 			DrawDuplicates(books, duplicates, selectedIndex, scrollOffset, subSelectedIndex, activePanel, statusMsg, statusColor, width, height)
 
 		case ViewReader:
-			DrawReader(activeReaderBook, readerLines, readerScrollIndex, readerSearchQuery, isReaderSearching, readerMatches, readerMatchIndex, libraryState, width, height)
+			DrawReader(activeReaderBook, readerLines, readerScrollIndex, readerSearchQuery, isReaderSearching, readerMatches, readerMatchIndex, libraryState, width, height, showRawMarkdown)
 		}
 
 		keys := <-inputChan
@@ -155,10 +156,10 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 					libraryState.BookProgress[activeReaderBook.SHA1] = readerScrollIndex
 					if err := state.SaveState(config.StatePath, libraryState); err != nil {
 						statusMsg = "⚠️ Save failed: " + err.Error()
-						statusColor = config.ColorErrorSt
+						statusColor = config.ActiveTheme.ErrorSt
 					} else {
 						statusMsg = "Closed Reader. Logged " + util.FormatDuration(duration) + " reading session."
-						statusColor = config.ColorSuccessSt
+						statusColor = config.ActiveTheme.SuccessSt
 					}
 					
 					currentView = ViewExplorer
@@ -173,7 +174,7 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 				selectedIndex = 0
 				scrollOffset = 0
 				statusMsg = "Search cleared."
-				statusColor = config.ColorVioletSt
+				statusColor = config.ActiveTheme.VioletSt
 			} else if currentView != ViewExplorer {
 				currentView = ViewExplorer
 				activePanel = PanelLeft
@@ -182,13 +183,13 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 				subSelectedIndex = 0
 				filteredBooks = FilterBooks(books, libraryState, searchQuery)
 				statusMsg = "Returned to Main Explorer."
-				statusColor = config.ColorSuccessSt
+				statusColor = config.ActiveTheme.SuccessSt
 			}
 			continue
 		}
 
 		// Quit app global
-		if keys[0] == 'q' && !isSearching && currentView != ViewReader {
+		if matchKey(keys, config.AppConfig.Keybindings.Quit) && !isSearching && currentView != ViewReader {
 			break
 		}
 
@@ -217,7 +218,7 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 			if keys[0] == 13 || keys[0] == 10 { // Enter locks search
 				isSearching = false
 				statusMsg = "Search locked. Tap 'Esc' to clear search query."
-				statusColor = config.ColorSuccessSt
+				statusColor = config.ActiveTheme.SuccessSt
 			} else if keys[0] == 127 || keys[0] == 8 { // Backspace
 				if len(searchQuery) > 0 {
 					searchQuery = searchQuery[:len(searchQuery)-1]
@@ -345,16 +346,18 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 					if err == nil {
 						oldState = newRawState
 					}
+				case 'm': // Toggle Markdown syntax markers
+					showRawMarkdown = !showRawMarkdown
 				case 'q': // Exit reader
 					duration := int(time.Since(readerStartTime).Seconds())
 					libraryState.ReadingTime[activeReaderBook.SHA1] += duration
 					libraryState.BookProgress[activeReaderBook.SHA1] = readerScrollIndex
 					if err := state.SaveState(config.StatePath, libraryState); err != nil {
 						statusMsg = "⚠️ Save failed: " + err.Error()
-						statusColor = config.ColorErrorSt
+						statusColor = config.ActiveTheme.ErrorSt
 					} else {
 						statusMsg = "Closed Reader. Logged " + util.FormatDuration(duration) + " reading session."
-						statusColor = config.ColorSuccessSt
+						statusColor = config.ActiveTheme.SuccessSt
 					}
 					
 					currentView = ViewExplorer
@@ -381,24 +384,24 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 				if len(filteredBooks) > 0 {
 					b := filteredBooks[selectedIndex]
 					statusMsg = "Launching in SumatraPDF: " + b.Title + "..."
-					statusColor = config.ColorSuccessSt
+					statusColor = config.ActiveTheme.SuccessSt
 					DrawExplorer(filteredBooks, selectedIndex, scrollOffset, isSearching, searchQuery, statusMsg, statusColor, libraryState, width, height)
 					
 					if libraryState.Statuses[b.SHA1] == "" || libraryState.Statuses[b.SHA1] == "Inbox" {
 						libraryState.Statuses[b.SHA1] = "Reading"
 						if err := state.SaveState(config.StatePath, libraryState); err != nil {
 							statusMsg = "⚠️ Save failed: " + err.Error()
-							statusColor = config.ColorErrorSt
+							statusColor = config.ActiveTheme.ErrorSt
 						}
 					}
 
 					err := viewer.OpenBookInSumatra(b)
 					if err != nil {
 						statusMsg = "Sumatra Launch failed: " + err.Error()
-						statusColor = config.ColorErrorSt
+						statusColor = config.ActiveTheme.ErrorSt
 					} else {
 						statusMsg = "Opened in SumatraPDF. Book status transitioned to 'Reading'."
-						statusColor = config.ColorSuccessSt
+						statusColor = config.ActiveTheme.SuccessSt
 						filteredBooks = FilterBooks(books, libraryState, searchQuery)
 					}
 				}
@@ -406,29 +409,29 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 
 			// Letter commands
 			if action == "" {
-				switch keys[0] {
-				case 's': // Search
+				charKey := string(keys[0])
+				if matchKey(keys, config.AppConfig.Keybindings.Search) {
 					isSearching = true
 					searchQuery = ""
 					statusMsg = "Search active. Type keywords, press 'Esc' to exit, 'Enter' to lock."
-					statusColor = config.ColorWarningSt
-				case 'v': // Launch TUI Reader & transition status
+					statusColor = config.ActiveTheme.WarningSt
+				} else if charKey == "v" {
 					if len(filteredBooks) > 0 {
 						b := filteredBooks[selectedIndex]
 						statusMsg = "Extracting book text natively: " + b.FileName + "..."
-						statusColor = config.ColorWarningSt
+						statusColor = config.ActiveTheme.WarningSt
 						DrawExplorer(filteredBooks, selectedIndex, scrollOffset, isSearching, searchQuery, statusMsg, statusColor, libraryState, width, height)
 
 						rawText, err := reader.ExtractBookRawText(b)
 						if err != nil {
 							statusMsg = "TUI Reader failed: " + err.Error() + " (Use SumatraPDF instead)"
-							statusColor = config.ColorErrorSt
+							statusColor = config.ActiveTheme.ErrorSt
 						} else {
 							if libraryState.Statuses[b.SHA1] == "" || libraryState.Statuses[b.SHA1] == "Inbox" {
 								libraryState.Statuses[b.SHA1] = "Reading"
 								if err := state.SaveState(config.StatePath, libraryState); err != nil {
 									statusMsg = "⚠️ Save failed: " + err.Error()
-									statusColor = config.ColorErrorSt
+									statusColor = config.ActiveTheme.ErrorSt
 								}
 							}
 
@@ -442,17 +445,17 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 							currentView = ViewReader
 						}
 					}
-				case 'd': // Dashboard
+				} else if matchKey(keys, config.AppConfig.Keybindings.Dashboard) {
 					currentView = ViewDashboard
-				case 'u': // Duplicates
+				} else if matchKey(keys, config.AppConfig.Keybindings.Duplicates) {
 					currentView = ViewDuplicates
 					selectedIndex = 0
 					scrollOffset = 0
 					subSelectedIndex = 0
 					activePanel = PanelLeft
 					statusMsg = "Duplicates Deck loaded."
-					statusColor = config.ColorVioletSt
-				case 'i': // Ingest directory scan
+					statusColor = config.ActiveTheme.VioletSt
+				} else if matchKey(keys, config.AppConfig.Keybindings.Ingest) {
 					_ = term.Restore(fd, oldState)
 					fmt.Print("\033[H\033[2J") // Clear
 					fmt.Println("📖 \033[1;36mAURA PORTABLE INGESTION ENGINE\033[0m")
@@ -498,7 +501,22 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 					filteredBooks = FilterBooks(books, libraryState, searchQuery)
 					selectedIndex = 0
 					scrollOffset = 0
-				case 'w': // Toggle status
+				} else if matchKey(keys, config.AppConfig.Keybindings.ThemeCycle) {
+					currentTheme := strings.ToLower(config.AppConfig.Theme.Name)
+					themes := []string{"midnight", "nord", "dracula", "solarized", "gruvbox", "contrast", "custom"}
+					nextIdx := 0
+					for idx, th := range themes {
+						if th == currentTheme {
+							nextIdx = (idx + 1) % len(themes)
+							break
+						}
+					}
+					nextTheme := themes[nextIdx]
+					config.AppConfig.Theme.Name = nextTheme
+					config.LoadTheme(nextTheme, config.AppConfig.Theme.Custom)
+					statusMsg = "Cycled theme to: " + strings.Title(nextTheme)
+					statusColor = config.ActiveTheme.SuccessSt
+				} else if charKey == "w" {
 					if len(filteredBooks) > 0 {
 						b := filteredBooks[selectedIndex]
 						currStatus := libraryState.Statuses[b.SHA1]
@@ -515,9 +533,9 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 									wipCount++
 								}
 							}
-							if wipCount >= 2 {
-								statusMsg = "⛔ WIP Limit Exceeded! Archive or finish one of your active reading books first!"
-								statusColor = config.ColorErrorSt
+							if wipCount >= config.AppConfig.General.WIPLimit {
+								statusMsg = fmt.Sprintf("⛔ WIP Limit Exceeded! Archive or finish one of your active reading books first! (Limit: %d)", config.AppConfig.General.WIPLimit)
+								statusColor = config.ActiveTheme.ErrorSt
 								continue
 							}
 							nextStatus = "Reading"
@@ -532,10 +550,10 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 						libraryState.Statuses[b.SHA1] = nextStatus
 						if err := state.SaveState(config.StatePath, libraryState); err != nil {
 							statusMsg = "⚠️ Status saved in memory, but disk save failed: " + err.Error()
-							statusColor = config.ColorErrorSt
+							statusColor = config.ActiveTheme.ErrorSt
 						} else {
 							statusMsg = "Status updated: " + b.Title + " -> " + nextStatus
-							statusColor = config.ColorSuccessSt
+							statusColor = config.ActiveTheme.SuccessSt
 						}
 						filteredBooks = FilterBooks(books, libraryState, searchQuery)
 					}
@@ -577,13 +595,13 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 					activePanel = PanelRight
 					subSelectedIndex = 0
 					statusMsg = "Focused Right Panel."
-					statusColor = config.ColorSuccessSt
+					statusColor = config.ActiveTheme.SuccessSt
 				}
 			case "LEFT":
 				if activePanel == PanelRight {
 					activePanel = PanelLeft
 					statusMsg = "Focused Left Panel."
-					statusColor = config.ColorVioletSt
+					statusColor = config.ActiveTheme.VioletSt
 				}
 			case "ENTER":
 				if activePanel == PanelRight && len(duplicates) > 0 {
@@ -592,7 +610,7 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 					if subSelectedIndex < len(groupBooks) {
 						target := groupBooks[subSelectedIndex]
 						statusMsg = "Opening to visually compare in SumatraPDF: " + target.FileName + "..."
-						statusColor = config.ColorSuccessSt
+						statusColor = config.ActiveTheme.SuccessSt
 						DrawDuplicates(books, duplicates, selectedIndex, scrollOffset, subSelectedIndex, activePanel, statusMsg, statusColor, width, height)
 						
 						_ = viewer.OpenBookInSumatra(target)
@@ -609,17 +627,17 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 						target := groupBooks[subSelectedIndex]
 						
 						statusMsg = "Deleting duplicate copy..."
-						statusColor = config.ColorWarningSt
+						statusColor = config.ActiveTheme.WarningSt
 						DrawDuplicates(books, duplicates, selectedIndex, scrollOffset, subSelectedIndex, activePanel, statusMsg, statusColor, width, height)
 
 						err := catalog.DeleteDuplicateSecurely(target)
 						if err != nil {
 							statusMsg = "Delete failed: " + err.Error()
-							statusColor = config.ColorErrorSt
+							statusColor = config.ActiveTheme.ErrorSt
 						} else {
 							books = catalog.RemoveBookFromMem(books, target.FullPath)
 							statusMsg = "🧹 [DELETED] Duplicate pruned successfully!"
-							statusColor = config.ColorSuccessSt
+							statusColor = config.ActiveTheme.SuccessSt
 							subSelectedIndex = 0
 							activePanel = PanelLeft
 						}
@@ -633,7 +651,7 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 					selectedIndex = 0
 					scrollOffset = 0
 					statusMsg = "Dashboard loaded."
-					statusColor = config.ColorSuccessSt
+					statusColor = config.ActiveTheme.SuccessSt
 				}
 			}
 		}
@@ -649,13 +667,13 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 					subSelectedIndex = 0
 					activePanel = PanelLeft
 					statusMsg = "Duplicates Deck loaded from Dashboard."
-					statusColor = config.ColorVioletSt
+					statusColor = config.ActiveTheme.VioletSt
 				case 'd':
 					currentView = ViewExplorer
 					selectedIndex = 0
 					scrollOffset = 0
 					statusMsg = "Returned to main Explorer."
-					statusColor = config.ColorSuccessSt
+					statusColor = config.ActiveTheme.SuccessSt
 				}
 			}
 		}
@@ -670,3 +688,7 @@ const (
 	ViewDuplicates
 	ViewReader // Console-Native Ebook Reader Screen
 )
+
+func matchKey(keys []byte, cfgKey string) bool {
+	return len(keys) == 1 && cfgKey != "" && keys[0] == cfgKey[0]
+}

@@ -16,9 +16,9 @@ const (
 
 func DrawDuplicates(books []catalog.Book, duplicates []string, sel, offset, subSel int, activePanel FocusPanel, statusMsg, statusColor string, width, height int) {
 	fmt.Print("\033[H\033[2J") // Clear
-	DrawLine(width, "=", config.ColorViolet)
-	fmt.Printf("%s                          AURA HARDENED DEDUPLICATION ENGINE                               \033[0m\n", config.ColorError)
-	DrawLine(width, "=", config.ColorViolet)
+	DrawLine(width, "=", config.ActiveTheme.Violet)
+	fmt.Printf("%s                          AURA HARDENED DEDUPLICATION ENGINE                               \033[0m\n", config.ActiveTheme.Error)
+	DrawLine(width, "=", config.ActiveTheme.Violet)
 
 	visibleDups := height - 14
 	if visibleDups < 5 {
@@ -26,10 +26,10 @@ func DrawDuplicates(books []catalog.Book, duplicates []string, sel, offset, subS
 	}
 
 	if len(duplicates) == 0 {
-		fmt.Printf("\n                    %s✔ [EXCELLENT] Zero duplicate files found on disk!\033[0m\n\n", config.ColorSuccess)
+		fmt.Printf("\n                    %s✔ [EXCELLENT] Zero duplicate files found on disk!\033[0m\n\n", config.ActiveTheme.Success)
 	} else {
 		fmt.Println("LEFT: Duplicate Groups list  |  RIGHT: Specific duplicate files (Press Tab to toggle)")
-		DrawLine(width, "-", config.ColorMuted)
+		DrawLine(width, "-", config.ActiveTheme.Muted)
 
 		end := offset + visibleDups
 		if end > len(duplicates) {
@@ -52,13 +52,13 @@ func DrawDuplicates(books []catalog.Book, duplicates []string, sel, offset, subS
 				if activePanel == PanelRight {
 					panelIndicator = " "
 				}
-				fmt.Printf("%sGroup %02d %s [DUP-ID: %-5s] %-40s | %d copies\033[0m\n", config.ColorSelectRed, idx+1, panelIndicator, grp, title, len(groupBooks))
+				fmt.Printf("%sGroup %02d %s [DUP-ID: %-5s] %-40s | %d copies\033[0m\n", config.ActiveTheme.SelectRed, idx+1, panelIndicator, grp, title, len(groupBooks))
 			} else {
-				fmt.Printf("%sGroup %02d\033[0m   [DUP-ID: %-5s] %-40s | %d copies\n", config.ColorError, idx+1, grp, title, len(groupBooks))
+				fmt.Printf("%sGroup %02d\033[0m   [DUP-ID: %-5s] %-40s | %d copies\n", config.ActiveTheme.Error, idx+1, grp, title, len(groupBooks))
 			}
 		}
 
-		DrawLine(width, "-", config.ColorMuted)
+		DrawLine(width, "-", config.ActiveTheme.Muted)
 
 		if sel < len(duplicates) {
 			activeGrp := duplicates[sel]
@@ -84,7 +84,7 @@ func DrawDuplicates(books []catalog.Book, duplicates []string, sel, offset, subS
 				rowContent := fmt.Sprintf("  [%d] %s Size: %.2f MB | Modified: %s\n      Path: %s", i+1, actionText, gb.SizeMB, gb.Modified, pathDisplay)
 				
 				if activePanel == PanelRight && i == subSel {
-					fmt.Printf("%s%s\033[0m\n", config.ColorSelectGrn, rowContent)
+					fmt.Printf("%s%s\033[0m\n", config.ActiveTheme.SelectGrn, rowContent)
 				} else {
 					fmt.Printf("%s\n", rowContent)
 				}
@@ -92,7 +92,7 @@ func DrawDuplicates(books []catalog.Book, duplicates []string, sel, offset, subS
 		}
 	}
 
-	DrawLine(width, "=", config.ColorMuted)
+	DrawLine(width, "=", config.ActiveTheme.Muted)
 	
 	// v5 HUD for Duplicates (Dynamic key guide based on panel focus!)
 	fmt.Printf("%s🔔 LOG: %s\033[0m\n", statusColor, statusMsg)

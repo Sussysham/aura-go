@@ -19,7 +19,21 @@ func ExtractBookRawText(b catalog.Book) (string, error) {
 		content, err := os.ReadFile(cleanPath)
 		if err != nil { return "", err }
 		return string(content), nil
-	} else if ext == ".epub" {
+	} else if ext == ".md" {
+		content, err := os.ReadFile(cleanPath)
+		if err != nil { return "", err }
+		return string(content), nil
+	} else if ext == ".pdf" {
+		txt, err := ExtractPDFText(cleanPath)
+		if err == nil && len(strings.TrimSpace(txt)) > 0 {
+			return txt, nil
+		}
+		return ExtractOCRText(cleanPath)
+	} else if ext == ".docx" {
+		return ExtractDOCXText(cleanPath)
+	} else if ext == ".mobi" {
+		return ExtractMOBIParagraphs(cleanPath)
+	} else if sepext := ".epub"; ext == sepext {
 		r, err := zip.OpenReader(cleanPath)
 		if err != nil { return "", err }
 		defer r.Close()
