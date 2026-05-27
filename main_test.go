@@ -2,8 +2,10 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -456,4 +458,64 @@ func TestMarkdownTUIRendering(t *testing.T) {
 			t.Errorf("FormatMarkdownLine(%q, showRaw=%v) plain output %q should NOT contain %q (actual: %q)", tt.input, tt.showRaw, plain, tt.notContains, actual)
 		}
 	}
+}
+
+// TestMCPServerIntegration verifies the compiled aura-mcp.exe JSON-RPC 2.0 stdio flow
+func TestMCPServerIntegration(t *testing.T) {
+	// First, check if aura-mcp.exe exists. If not, compile it!
+	binPath := "./aura-mcp-test.exe"
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		cmd := exec.Command("go", "build", "-o", binPath, "./cmd/aura-mcp")
+		err = cmd.Run()
+		if err != nil {
+			t.Skip("Skipping integration test: aura-mcp-test.exe could not be compiled:", err)
+		}
+		defer os.Remove(binPath)
+	}
+
+	// Spawn the server as a child process
+	cmd := exec.Command(binPath)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stdin pipe: %v", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stdout pipe: %v", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start child mcp server: %v", err)
+	}
+
+	// 1. Send initialize request
+	initReq := `{"jsonrpc":"2.0","method":"initialize","id":1}`
+	_, _ = stdin.Write([]byte(initReq + "\n"))
+
+	reader := bufio.NewReader(stdout)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read response from server: %v", err)
+	}
+
+	if !strings.Contains(line, `"protocolVersion"`) || !strings.Contains(line, `"aura-mcp"`) {
+		t.Errorf("Initialize response did not contain expected fields, got: %q", line)
+	}
+
+	// 2. Send tools/list request
+	listReq := `{"jsonrpc":"2.0","method":"tools/list","id":2}`
+	_, _ = stdin.Write([]byte(listReq + "\n"))
+
+	line, err = reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read tools/list response: %v", err)
+	}
+
+	if !strings.Contains(line, "aura_list_books") || !strings.Contains(line, "aura_read_book") {
+		t.Errorf("tools/list response did not list expected tools, got: %q", line)
+	}
+
+	// Clean up child process
+	_ = stdin.Close()
+	_ = cmd.Wait()
 }

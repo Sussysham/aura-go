@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "aura-mcp": {
+      "command": "D:\\Audit and revam\\aura-go\\aura-mcp.exe",
+      "args": []
+    }
+  }
+}
