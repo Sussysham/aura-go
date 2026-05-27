@@ -166,7 +166,7 @@ func RunTUI(fd int, books []catalog.Book, libraryState *state.LibraryState, oldS
 					scrollOffset = 0
 					filteredBooks = FilterBooks(books, libraryState, searchQuery)
 				}
-			} else if isSearching {
+			} else if isSearching || searchQuery != "" {
 				isSearching = false
 				searchQuery = ""
 				filteredBooks = FilterBooks(books, libraryState, searchQuery)
